@@ -11,11 +11,12 @@ import secrets
 import subprocess
 import tarfile
 import tempfile
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from .resources import payload_directory
-from .root_agent import RootAgentServer, generate_secret, write_secret
+from .root_agent import RootAgentConnection, RootAgentServer, generate_secret, write_secret
 from .sdb import (
     SDB_BRIDGE_PORT,
     CaptureResult,
@@ -252,7 +253,19 @@ async def probe(
     payloads: Path | None = None,
     bridge_token: str | None = None,
     bridge_port: int = SDB_BRIDGE_PORT,
+    session_action: Callable[[RootAgentConnection], Awaitable[None]] | None = None,
+    session_timeout: float = 300.0,
 ) -> dict[str, object]:
+    """Run commands and an optional action within one authenticated root session.
+
+    The action runs before commands and can use the connection for file transfers
+    or commands that depend on previous results. Its timeout also extends the
+    launcher transport's lifetime; shutdown and staging cleanup still run if the
+    action fails or times out. Calls without an action retain the transport's
+    existing timeout.
+    """
+    if not 0 < session_timeout <= 7200:
+        raise ValueError("session_timeout must be between 0 and 7200 seconds")
     ipaddress.IPv4Address(tv_host)
     callback = callback_host or route_callback_host(tv_host)
     ipaddress.IPv4Address(callback)
@@ -300,7 +313,9 @@ async def probe(
                     command,
                     callback_host=callback,
                     bind_host=bind,
-                    timeout=accept_timeout + 20,
+                    timeout=accept_timeout + 20 + (
+                        session_timeout if session_action is not None else 0
+                    ),
                 )
             )
             try:
@@ -337,6 +352,8 @@ async def probe(
                     "smack": identity.smack_label.strip(),
                     "preflight_capabilities": assessment.capabilities,
                 }
+                if session_action is not None:
+                    await asyncio.wait_for(session_action(connection), session_timeout)
                 if commands:
                     evidence["commands"] = []
                     for command_text in commands:
