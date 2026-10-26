@@ -1,7 +1,7 @@
 DOTNET ?= dotnet
 DOTNET31 ?= $(DOTNET)
 CLANG ?= clang
-LLD ?= $(firstword $(wildcard /usr/lib/llvm*/bin/ld.lld))
+LLD ?= $(firstword $(wildcard /usr/lib/llvm*/bin/ld.lld) $(wildcard /opt/homebrew/opt/lld/bin/ld.lld) $(wildcard /opt/homebrew/opt/llvm/bin/ld.lld) $(wildcard /usr/local/opt/lld/bin/ld.lld) $(wildcard /usr/local/opt/llvm/bin/ld.lld))
 
 QN90B_OUT := payloads/qn90b/out
 QN90F_OUT := payloads/qn90f/out
@@ -25,6 +25,8 @@ common-payload:
 	$(DOTNET) build payloads/common/SamsungTvRemoteInputAgent.csproj \
 		--configuration Release --output "$(COMMON_OUT)"
 	$(DOTNET) build payloads/common/SamsungTvEventAgent.csproj \
+		--configuration Release --output "$(COMMON_OUT)"
+	$(DOTNET) build payloads/common/SamsungTvSwuOracle.csproj \
 		--configuration Release --output "$(COMMON_OUT)"
 	cp payloads/qn90f/MaliPhysicalProbe.runtimeconfig.json \
 		"$(COMMON_OUT)/SamsungTvRootAgent.runtimeconfig.json"
